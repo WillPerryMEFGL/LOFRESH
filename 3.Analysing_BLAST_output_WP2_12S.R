@@ -653,7 +653,8 @@ seqtabNoC_WP2A_12S_tax_normalised <- merge(lofresh_metadata_WP2_3_summary[, c("S
 
 ########SEASONAL IMPACT ON SPECIES DETECTION########
 sps_seasonal_detection<-unique(seqtabNoC_WP2A_12S_tax_normalised[c("SampleSite_time", "species")])
-sps_seasonal_detection <- merge(lofresh_metadata_WP2_3_summary[, c("SampleSite_time", "season")],sps_seasonal_detection, by="SampleSite_time")
+sps_seasonal_detection <- merge(lofresh_metadata_WP2_3_summary[, c("SampleSite_time", "season","SampleSite_code","Dist_from_lake")],sps_seasonal_detection, by="SampleSite_time")
+#sps_seasonal_detection<-unique(sps_seasonal_detection[c("SampleSite_code","Dist_from_lake","season", "species")])
 
 sps_seasonal_detection_summary<-count(sps_seasonal_detection, season, species)
 sps_seasonal_detection_summary$season <- factor(sps_seasonal_detection_summary$season, levels = c("Winter", "Spring", "Summer", "Autumn"))
@@ -662,7 +663,8 @@ sps_seasonal_detection_summary$season <- factor(sps_seasonal_detection_summary$s
 
 ggplot(data=sps_seasonal_detection_summary, aes(x=season, y=n)) +
   geom_line()+
-  geom_point()+facet_grid((.~species))
+  geom_point()+facet_grid((.~species))+
+  theme(axis.text.x = element_text(angle = 90))
 
 
 #######SALMON CASE STUDY######
@@ -818,6 +820,8 @@ seqtabNoC_WP2A_12S_tax_normalised_wide[] <- lapply(seqtabNoC_WP2A_12S_tax_normal
 write.csv(seqtabNoC_WP2A_12S_tax_normalised_wide,"NORM_WP2A_ASV_table_wide_filtered.csv")
 
 ########PERMANOVA ON TAXON########
+setwd("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/WP2_analysis/12S_BLAST")
+
 NORM_WP2A_ASV_table_wide_filtered <- read_csv("NORM_WP2A_ASV_table_wide_filtered.csv")
 adonis_data<-NORM_WP2A_ASV_table_wide_filtered
 adonis_data_samples<-adonis_data$X1
@@ -843,7 +847,8 @@ adonis_data<-adonis_data[,-c(1:16)]
 
 adonis_data_meta$Days<-as.numeric(adonis_data_meta$Days)
 
-adon.results_WP2<-adonis2(adonis_data ~ adonis_data_meta$season/adonis_data_meta$Days+
+adon.results_WP2<-adonis2(adonis_data ~ 
+                            adonis_data_meta$season/adonis_data_meta$Days+
                             adonis_data_meta$Dist_from_lake+
                             adonis_data_meta$daily_flow_by_catchment+
                             adonis_data_meta$monthly_flow_by_catchment+
@@ -967,6 +972,10 @@ ggplot(species_count_dataset, aes(Days, species_count)) +
   geom_point() + 
   geom_smooth(method = "gam", formula = y ~ s(x))#+facet_wrap(~SampleSite_code)
 
+ggplot(species_count_dataset, aes(gran_alk_ueq_L, species_count)) + 
+  geom_point() + 
+  geom_smooth(method = "gam", formula = y ~ s(x))+facet_wrap(~SampleSite_code)
+
 ggplot(species_count_dataset, aes(temp_monthly_average, species_count)) + 
   geom_point() + 
   geom_smooth(method = "gam", formula = y ~ s(x))+facet_wrap(~SampleSite_code)
@@ -998,32 +1007,43 @@ ggplot(species_count_dataset, aes(season, species_count)) +
 data = species_count_dataset %>%
   mutate(river_section = factor(river_section))
 
-mod_gam2 <- gam(species_count ~ s(Days, bs="tp") + 
+mod_gam2 <- gam(species_count ~ s(Days) + season+
                   s(Dist_from_lake)+
-                  s(pH),
-                  #s(pH, river_section, bs=c("tp", "re")),
-                #"temp_monthly_average",
-               #"conductivity_uS_cm",
-                #"gran_alk_ueq_L","daily_flow_by_catchment",
-                #"monthly_flow_by_catchment",
-                #"seasonal_flow_by_catchment",
-               # "week_before_flow_by_catchment",
-                #"river_width_m",
-                #"river_gradient_percent",
-                #"rainfall_monthly_average",
-                 #"river_section"
+                  s(pH)+
+                  s(temp_monthly_average)+
+                  s(conductivity_uS_cm)+
+                  s(gran_alk_ueq_L)+
+                  s(daily_flow_by_catchment)+
+                  s(monthly_flow_by_catchment)+
+                  s(seasonal_flow_by_catchment)+
+                  s(week_before_flow_by_catchment)+
+                  s(river_gradient_percent)+
+                  s(rainfall_monthly_average),
                   data=data,
-                  family=Tweedie(p=1.00001), method="REML", select=TRUE)
-
-summary(mod_gam2)
-
+                  method="REML", select=TRUE)
+#plot(mod_gam2)
 gam.check(mod_gam2)
 appraise(mod_gam2)
 draw(mod_gam2)
 
-plot_smooths(
-  model = mod_gam2,
-  series = Days) 
+summary(mod_gam2)
+
+mod_gam3 <- gam(species_count ~ 
+                  s(Dist_from_lake)+
+                  s(temp_monthly_average)+
+                  s(conductivity_uS_cm)+
+                  s(gran_alk_ueq_L)+
+                  s(monthly_flow_by_catchment)+
+                  s(seasonal_flow_by_catchment)+
+                  s(week_before_flow_by_catchment)+season,
+                data=data,
+                method="REML", select=TRUE)
+summary(mod_gam3)
+anova(mod_gam3)
+plot(mod_gam3)
+draw(mod_gam3)
+
+
 
 species_count_dataset<-na.omit(species_count_dataset)
 
@@ -1040,7 +1060,8 @@ ggplot(shannon_index_dataset, aes(Dist_from_lake, shannon_index,colour=season)) 
 
 hist(species_count_dataset$species_count)
 
-lm_12S_species_count = lm(species_count~season*
+lm_12S_species_count = lm(species_count~
+                            season*
                             Dist_from_lake+
                             temp_monthly_average+
                             conductivity_uS_cm+
@@ -1071,28 +1092,103 @@ pairs(m.lst)
 cohens_f_squared_12S<-cohens_f_squared(lm_12S_species_count_2)
 plot(cohens_f_squared_12S)
 
-#GAM 
-gam_12S_species_count = gam(species_count~season+
-                            Dist_from_lake+
-                            temp_monthly_average+
-                            s(conductivity_uS_cm)+
-                            s(gran_alk_ueq_L)+
-                            s(daily_flow_by_catchment)+
-                            s(seasonal_flow_by_catchment)+
-                            s(monthly_flow_by_catchment)+
-                            s(week_before_flow_by_catchment)+
-                            (river_width_m)+
-                            (river_gradient_percent)+
-                            rainfall_monthly_average+
-                            s(pH), data = species_count_dataset)
-
-summary(gam_12S_species_count )
-
-
 
 #pairwise comparisons 
 #emmeans_season_river_section<-emmeans(lm_12S_species_count_2, pairwise ~ Dist_from_lake*season)
 #plot(emmeans_season_river_section)
+
+######## Turnover and nestedness ########
+setwd("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/WP2_analysis/12S_BLAST")
+NORM_WP2A_ASV_table_wide_filtered <- read_csv("NORM_WP2A_ASV_table_wide_filtered.csv")
+adonis_data<-NORM_WP2A_ASV_table_wide_filtered
+
+SampleSite_time<-NORM_WP2A_ASV_table_wide_filtered$X1
+SampleSite_time<-data.frame(SampleSite_time)
+SampleSite_time <- tibble::rownames_to_column(SampleSite_time, "SiteID_1")
+
+adonis_data_samples<-adonis_data$X1
+adonis_data_samples<-data.frame(adonis_data_samples)
+adonis_data_samples<-adonis_data_samples %>% rename(ID = adonis_data_samples)
+adonis_data<-adonis_data %>% rename(SampleSite_time = X1)
+
+lofresh_metadata_WP2_3 <- read_csv("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/metadata/lofresh_metadata_WP2&3.csv")
+lofresh_metadata_WP2_3 = lofresh_metadata_WP2_3[!duplicated(lofresh_metadata_WP2_3$SampleSite_time),]
+
+adonis_data<- merge(lofresh_metadata_WP2_3[, c("SampleSite_time","river_section","season","Days","Dist_from_lake","pH",
+                                               "conductivity_uS_cm","gran_alk_ueq_L","daily_flow_by_catchment","monthly_flow_by_catchment","seasonal_flow_by_catchment",
+                                               "week_before_flow_by_catchment","river_width_m","river_gradient_percent","rainfall_monthly_average",
+                                               "temp_monthly_average"
+                                               #"Arable_and_horticulture_ha","Broadleaf_woodland_ha",	"Coniferous_woodland_ha",
+                                               #"Acid_grassland_ha",	"Neutral_grassland_ha",	"Improved_grassland_ha",	"Heather_grassland_ha",	"Heather_ha",
+                                               #"Bog_ha",	"Freshwater_ha",	"Inland_rock_ha",	"Supralittoral_sediment_ha",	"Suburban_ha",	"Urban_ha"
+)],adonis_data, by="SampleSite_time")
+
+SampleSite_time<-merge(lofresh_metadata_WP2_3[, c("SampleSite_time","Dist_from_lake","Days")],SampleSite_time, by="SampleSite_time")
+
+adonis_data_meta<- adonis_data[c(1:16)]
+adonis_data<-adonis_data[,-c(1:16)]
+
+adonis_data<-na.omit(adonis_data)
+
+adonis_data_meta$Days<-as.numeric(adonis_data_meta$Days)
+#out <- nestedtemp(adonis_data)
+#plot(out)
+#plot(out, kind="incid")
+
+library(betapart)
+#library(qgraph)
+adonis_data<-adonis_data %>% mutate_if(is.numeric, ~1 * (. != 0))
+adonis_data<-adonis_data[, colSums(adonis_data != 0) > 0]
+sorensen.beta<-beta.pair(adonis_data, index.family="sorensen")
+
+nestedness <- as.matrix(sorensen.beta[[3]])
+nestedness <- melt(nestedness)
+names(nestedness) <- c("SiteID_1", "SiteID_2", "Beta_Distance")
+
+###-----------------------
+## get nestedness matrix (this is [[2]]) into a data frame
+###-----------------------
+m.beta.sorn <- as.matrix(sorensen.beta[[2]])
+m.beta.sorn <- melt(m.beta.sorn)
+names(m.beta.sorn) <- c("SiteID_1", "SiteID_2", "Beta_nest")
+beta.measures.sor <- merge(nestedness, m.beta.sorn, by = c("SiteID_1","SiteID_2")) 
+
+###-----------------------
+## get turnover matrix (here simpson, this is [[1]]) into a data frame
+###-----------------------
+m.beta.sort <- as.matrix(sorensen.beta[[1]])
+m.beta.sort  <- melt(m.beta.sort )
+names(m.beta.sort ) <- c("SiteID_1", "SiteID_2", "Beta_turn")
+beta.measures.sor <- merge(beta.measures.sor, m.beta.sort , by = c("SiteID_1","SiteID_2")) 
+
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_1")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_1 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_1 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_1 = Days)
+
+SampleSite_time<-SampleSite_time %>% rename(SiteID_2 = SiteID_1)
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_2")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_2 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_2 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_2 = Days)
+
+beta.measures.sor$Dist_from_lake_DIFF<-(beta.measures.sor$Dist_from_lake_2-beta.measures.sor$Dist_from_lake_1)
+beta.measures.sor$Days_2<-as.numeric(beta.measures.sor$Days_2)
+beta.measures.sor$Days_1<-as.numeric(beta.measures.sor$Days_1)
+beta.measures.sor$Days_DIFF<-(beta.measures.sor$Days_2-beta.measures.sor$Days_1)
+beta.measures.sor <- beta.measures.sor[beta.measures.sor$Days_DIFF >= 0, ]
+
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_turn, colour=Days_DIFF)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_nest, colour=Days_DIFF)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_Distance, colour=Days_DIFF)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+
+hist(beta.measures.sor$Days_DIFF_sqrd)
 
 ######## Sparse partial least squares analysis ##########
 library(mixOmics)
@@ -1130,8 +1226,8 @@ adonis_data<- merge(lofresh_metadata_WP2_3[, c("SampleSite_time",
 
 adonis_data<-na.omit(adonis_data)
 
-adonis_data_meta<- adonis_data[c(1:29)]
-adonis_data<-adonis_data[,-c(1:29)]
+adonis_data_meta<- adonis_data[c(1:28)]
+adonis_data<-adonis_data[,-c(1:28)]
 
 adonis_data_meta$Days<-as.numeric(adonis_data_meta$Days)
 adonis_data_meta$SampleSite_time<-NULL
@@ -2336,3 +2432,500 @@ ggplot(gg, aes(x = NMDS1, y = NMDS2,colour = Dist_from_lake)) + scale_shape_manu
   theme_bw()+  theme(axis.title.x=element_blank())+  theme(axis.title.y=element_blank())+ 
   geom_point(aes(x=NMDS1.x,y=NMDS2.y),size=3,colour="red")+
   geom_segment(aes(x=NMDS1.x, y=NMDS2.y, xend=NMDS1, yend=NMDS2))
+
+######## Turnover and nestedness Conwy ########
+setwd("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/WP2_analysis/12S_BLAST")
+NORM_WP2_ASV_table_wide_filtered <- read_csv("NORM_WP2A_ASV_table_wide_filtered.csv")
+adonis_data<-NORM_WP2_ASV_table_wide_filtered
+
+SampleSite_time<-NORM_WP2_ASV_table_wide_filtered$X1
+SampleSite_time<-data.frame(SampleSite_time)
+SampleSite_time <- tibble::rownames_to_column(SampleSite_time, "SiteID_1")
+
+adonis_data_samples<-adonis_data$X1
+adonis_data_samples<-data.frame(adonis_data_samples)
+adonis_data_samples<-adonis_data_samples %>% rename(ID = adonis_data_samples)
+adonis_data<-adonis_data %>% rename(SampleSite_time = X1)
+
+lofresh_metadata_WP2_3 <- read_csv("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/metadata/lofresh_metadata_WP2&3.csv")
+lofresh_metadata_WP2_3 = lofresh_metadata_WP2_3[!duplicated(lofresh_metadata_WP2_3$SampleSite_time),]
+
+adonis_data<- merge(lofresh_metadata_WP2_3[, c("SampleSite_time","river_section","season","Days","Dist_from_lake","pH",
+                                               "conductivity_uS_cm","gran_alk_ueq_L","daily_flow_by_catchment","monthly_flow_by_catchment","seasonal_flow_by_catchment",
+                                               "week_before_flow_by_catchment","river_width_m","river_gradient_percent","rainfall_monthly_average",
+                                               "temp_monthly_average","Date_sampled"
+                                               #"Arable_and_horticulture_ha","Broadleaf_woodland_ha",	"Coniferous_woodland_ha",
+                                               #"Acid_grassland_ha",	"Neutral_grassland_ha",	"Improved_grassland_ha",	"Heather_grassland_ha",	"Heather_ha",
+                                               #"Bog_ha",	"Freshwater_ha",	"Inland_rock_ha",	"Supralittoral_sediment_ha",	"Suburban_ha",	"Urban_ha"
+)],adonis_data, by="SampleSite_time")
+
+adonis_data<-adonis_data[adonis_data$Date_sampled != "01.09.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "02.11.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "04.01.18" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "11.04.18" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "12.06.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "12.08.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "12.10.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "14.02.18" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "14.12.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "18.04.18" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "18.05.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "22.09.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "23.11.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "25.01.18" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "27.04.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "28.03.18" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "29.06.17" , ] 
+adonis_data<-adonis_data[adonis_data$Date_sampled != "29.06.17" , ] 
+
+SampleSite_time<-merge(lofresh_metadata_WP2_3[, c("SampleSite_time","Dist_from_lake","Days")],SampleSite_time, by="SampleSite_time")
+
+adonis_data_meta<- adonis_data[c(1:17)]
+adonis_data<-adonis_data[,-c(1:17)]
+
+adonis_data<-na.omit(adonis_data)
+
+adonis_data_meta$Days<-as.numeric(adonis_data_meta$Days)
+#out <- nestedtemp(adonis_data)
+#plot(out)
+#plot(out, kind="incid")
+
+library(betapart)
+#library(qgraph)
+adonis_data<-adonis_data %>% mutate_if(is.numeric, ~1 * (. != 0))
+adonis_data<-adonis_data[, colSums(adonis_data != 0) > 0]
+sorensen.beta<-beta.pair(adonis_data, index.family="sorensen")
+
+nestedness <- as.matrix(sorensen.beta[[3]])
+nestedness <- melt(nestedness)
+names(nestedness) <- c("SiteID_1", "SiteID_2", "Beta_Distance")
+
+###-----------------------
+## get nestedness matrix (this is [[2]]) into a data frame
+###-----------------------
+m.beta.sorn <- as.matrix(sorensen.beta[[2]])
+m.beta.sorn <- melt(m.beta.sorn)
+names(m.beta.sorn) <- c("SiteID_1", "SiteID_2", "Beta_nest")
+beta.measures.sor <- merge(nestedness, m.beta.sorn, by = c("SiteID_1","SiteID_2")) 
+
+###-----------------------
+## get turnover matrix (here simpson, this is [[1]]) into a data frame
+###-----------------------
+m.beta.sort <- as.matrix(sorensen.beta[[1]])
+m.beta.sort  <- melt(m.beta.sort )
+names(m.beta.sort ) <- c("SiteID_1", "SiteID_2", "Beta_turn")
+beta.measures.sor <- merge(beta.measures.sor, m.beta.sort , by = c("SiteID_1","SiteID_2")) 
+
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_1")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_1 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_1 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_1 = Days)
+
+SampleSite_time<-SampleSite_time %>% rename(SiteID_2 = SiteID_1)
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_2")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_2 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_2 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_2 = Days)
+
+beta.measures.sor$Dist_from_lake_DIFF<-(beta.measures.sor$Dist_from_lake_2-beta.measures.sor$Dist_from_lake_1)
+beta.measures.sor_Conwy<-beta.measures.sor
+
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_turn)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_nest)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_Distance)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+
+######## Turnover and nestedness Glatt ########
+
+setwd("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/WP2_analysis/12S_BLAST")
+NORM_WP2_ASV_table_wide_filtered <- read_csv("NORM_WP2C_Glatt_ASV_table_wide_filtered.csv")
+adonis_data<-NORM_WP2_ASV_table_wide_filtered
+
+SampleSite_time<-NORM_WP2_ASV_table_wide_filtered$X1
+SampleSite_time<-data.frame(SampleSite_time)
+SampleSite_time <- tibble::rownames_to_column(SampleSite_time, "SiteID_1")
+
+adonis_data_samples<-adonis_data$X1
+adonis_data_samples<-data.frame(adonis_data_samples)
+adonis_data_samples<-adonis_data_samples %>% rename(ID = adonis_data_samples)
+adonis_data<-adonis_data %>% rename(SampleSite_time = X1)
+
+lofresh_metadata_WP2_3 <- read_csv("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/metadata/lofresh_metadata_WP2&3.csv")
+lofresh_metadata_WP2_3 = lofresh_metadata_WP2_3[!duplicated(lofresh_metadata_WP2_3$SampleSite_time),]
+
+adonis_data<- merge(lofresh_metadata_WP2_3[, c("SampleSite_time","river_section","season","Days","Dist_from_lake","pH",
+                                               "conductivity_uS_cm","gran_alk_ueq_L","daily_flow_by_catchment","monthly_flow_by_catchment","seasonal_flow_by_catchment",
+                                               "week_before_flow_by_catchment","river_width_m","river_gradient_percent","rainfall_monthly_average",
+                                               "temp_monthly_average","Date_sampled"
+                                               #"Arable_and_horticulture_ha","Broadleaf_woodland_ha",	"Coniferous_woodland_ha",
+                                               #"Acid_grassland_ha",	"Neutral_grassland_ha",	"Improved_grassland_ha",	"Heather_grassland_ha",	"Heather_ha",
+                                               #"Bog_ha",	"Freshwater_ha",	"Inland_rock_ha",	"Supralittoral_sediment_ha",	"Suburban_ha",	"Urban_ha"
+)],adonis_data, by="SampleSite_time")
+
+SampleSite_time<-merge(lofresh_metadata_WP2_3[, c("SampleSite_time","Dist_from_lake","Days")],SampleSite_time, by="SampleSite_time")
+
+adonis_data_meta<- adonis_data[c(1:17)]
+adonis_data<-adonis_data[,-c(1:17)]
+
+adonis_data<-na.omit(adonis_data)
+
+adonis_data_meta$Days<-as.numeric(adonis_data_meta$Days)
+#out <- nestedtemp(adonis_data)
+#plot(out)
+#plot(out, kind="incid")
+
+library(betapart)
+#library(qgraph)
+adonis_data<-adonis_data %>% mutate_if(is.numeric, ~1 * (. != 0))
+adonis_data<-adonis_data[, colSums(adonis_data != 0) > 0]
+sorensen.beta<-beta.pair(adonis_data, index.family="sorensen")
+
+nestedness <- as.matrix(sorensen.beta[[3]])
+nestedness <- melt(nestedness)
+names(nestedness) <- c("SiteID_1", "SiteID_2", "Beta_Distance")
+
+###-----------------------
+## get nestedness matrix (this is [[2]]) into a data frame
+###-----------------------
+m.beta.sorn <- as.matrix(sorensen.beta[[2]])
+m.beta.sorn <- melt(m.beta.sorn)
+names(m.beta.sorn) <- c("SiteID_1", "SiteID_2", "Beta_nest")
+beta.measures.sor <- merge(nestedness, m.beta.sorn, by = c("SiteID_1","SiteID_2")) 
+
+###-----------------------
+## get turnover matrix (here simpson, this is [[1]]) into a data frame
+###-----------------------
+m.beta.sort <- as.matrix(sorensen.beta[[1]])
+m.beta.sort  <- melt(m.beta.sort )
+names(m.beta.sort ) <- c("SiteID_1", "SiteID_2", "Beta_turn")
+beta.measures.sor <- merge(beta.measures.sor, m.beta.sort , by = c("SiteID_1","SiteID_2")) 
+
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_1")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_1 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_1 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_1 = Days)
+
+SampleSite_time<-SampleSite_time %>% rename(SiteID_2 = SiteID_1)
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_2")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_2 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_2 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_2 = Days)
+
+beta.measures.sor$Dist_from_lake_DIFF<-(beta.measures.sor$Dist_from_lake_2-beta.measures.sor$Dist_from_lake_1)
+beta.measures.sor_Glatt<-beta.measures.sor
+
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_turn)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_nest)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_Distance)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+
+######## Turnover and nestedness Gwash ########
+
+setwd("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/WP2_analysis/12S_BLAST")
+NORM_WP2_ASV_table_wide_filtered <- read_csv("NORM_WP2C_Gwash_ASV_table_wide_filtered.csv")
+adonis_data<-NORM_WP2_ASV_table_wide_filtered
+
+SampleSite_time<-NORM_WP2_ASV_table_wide_filtered$X1
+SampleSite_time<-data.frame(SampleSite_time)
+SampleSite_time <- tibble::rownames_to_column(SampleSite_time, "SiteID_1")
+
+adonis_data_samples<-adonis_data$X1
+adonis_data_samples<-data.frame(adonis_data_samples)
+adonis_data_samples<-adonis_data_samples %>% rename(ID = adonis_data_samples)
+adonis_data<-adonis_data %>% rename(SampleSite_time = X1)
+
+lofresh_metadata_WP2_3 <- read_csv("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/metadata/lofresh_metadata_WP2&3.csv")
+lofresh_metadata_WP2_3 = lofresh_metadata_WP2_3[!duplicated(lofresh_metadata_WP2_3$SampleSite_time),]
+
+adonis_data<- merge(lofresh_metadata_WP2_3[, c("SampleSite_time","river_section","season","Days","Dist_from_lake","pH",
+                                               "conductivity_uS_cm","gran_alk_ueq_L","daily_flow_by_catchment","monthly_flow_by_catchment","seasonal_flow_by_catchment",
+                                               "week_before_flow_by_catchment","river_width_m","river_gradient_percent","rainfall_monthly_average",
+                                               "temp_monthly_average","Date_sampled"
+                                               #"Arable_and_horticulture_ha","Broadleaf_woodland_ha",	"Coniferous_woodland_ha",
+                                               #"Acid_grassland_ha",	"Neutral_grassland_ha",	"Improved_grassland_ha",	"Heather_grassland_ha",	"Heather_ha",
+                                               #"Bog_ha",	"Freshwater_ha",	"Inland_rock_ha",	"Supralittoral_sediment_ha",	"Suburban_ha",	"Urban_ha"
+)],adonis_data, by="SampleSite_time")
+
+SampleSite_time<-merge(lofresh_metadata_WP2_3[, c("SampleSite_time","Dist_from_lake","Days")],SampleSite_time, by="SampleSite_time")
+
+adonis_data_meta<- adonis_data[c(1:17)]
+adonis_data<-adonis_data[,-c(1:17)]
+
+adonis_data<-na.omit(adonis_data)
+
+adonis_data_meta$Days<-as.numeric(adonis_data_meta$Days)
+#out <- nestedtemp(adonis_data)
+#plot(out)
+#plot(out, kind="incid")
+
+library(betapart)
+#library(qgraph)
+adonis_data<-adonis_data %>% mutate_if(is.numeric, ~1 * (. != 0))
+adonis_data<-adonis_data[, colSums(adonis_data != 0) > 0]
+sorensen.beta<-beta.pair(adonis_data, index.family="sorensen")
+
+nestedness <- as.matrix(sorensen.beta[[3]])
+nestedness <- melt(nestedness)
+names(nestedness) <- c("SiteID_1", "SiteID_2", "Beta_Distance")
+
+###-----------------------
+## get nestedness matrix (this is [[2]]) into a data frame
+###-----------------------
+m.beta.sorn <- as.matrix(sorensen.beta[[2]])
+m.beta.sorn <- melt(m.beta.sorn)
+names(m.beta.sorn) <- c("SiteID_1", "SiteID_2", "Beta_nest")
+beta.measures.sor <- merge(nestedness, m.beta.sorn, by = c("SiteID_1","SiteID_2")) 
+
+###-----------------------
+## get turnover matrix (here simpson, this is [[1]]) into a data frame
+###-----------------------
+m.beta.sort <- as.matrix(sorensen.beta[[1]])
+m.beta.sort  <- melt(m.beta.sort )
+names(m.beta.sort ) <- c("SiteID_1", "SiteID_2", "Beta_turn")
+beta.measures.sor <- merge(beta.measures.sor, m.beta.sort , by = c("SiteID_1","SiteID_2")) 
+
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_1")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_1 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_1 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_1 = Days)
+
+SampleSite_time<-SampleSite_time %>% rename(SiteID_2 = SiteID_1)
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_2")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_2 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_2 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_2 = Days)
+
+beta.measures.sor$Dist_from_lake_DIFF<-(beta.measures.sor$Dist_from_lake_2-beta.measures.sor$Dist_from_lake_1)
+beta.measures.sor_Gwash<-beta.measures.sor
+
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_turn)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_nest)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_Distance)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+
+
+
+######## Turnover and nestedness Towy ########
+
+setwd("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/WP2_analysis/12S_BLAST")
+NORM_WP2_ASV_table_wide_filtered <- read_csv("NORM_WP2C_Towy_ASV_table_wide_filtered.csv")
+adonis_data<-NORM_WP2_ASV_table_wide_filtered
+
+SampleSite_time<-NORM_WP2_ASV_table_wide_filtered$X1
+SampleSite_time<-data.frame(SampleSite_time)
+SampleSite_time <- tibble::rownames_to_column(SampleSite_time, "SiteID_1")
+
+adonis_data_samples<-adonis_data$X1
+adonis_data_samples<-data.frame(adonis_data_samples)
+adonis_data_samples<-adonis_data_samples %>% rename(ID = adonis_data_samples)
+adonis_data<-adonis_data %>% rename(SampleSite_time = X1)
+
+lofresh_metadata_WP2_3 <- read_csv("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/metadata/lofresh_metadata_WP2&3.csv")
+lofresh_metadata_WP2_3 = lofresh_metadata_WP2_3[!duplicated(lofresh_metadata_WP2_3$SampleSite_time),]
+
+adonis_data<- merge(lofresh_metadata_WP2_3[, c("SampleSite_time","river_section","season","Days","Dist_from_lake","pH",
+                                               "conductivity_uS_cm","gran_alk_ueq_L","daily_flow_by_catchment","monthly_flow_by_catchment","seasonal_flow_by_catchment",
+                                               "week_before_flow_by_catchment","river_width_m","river_gradient_percent","rainfall_monthly_average",
+                                               "temp_monthly_average","Date_sampled"
+                                               #"Arable_and_horticulture_ha","Broadleaf_woodland_ha",	"Coniferous_woodland_ha",
+                                               #"Acid_grassland_ha",	"Neutral_grassland_ha",	"Improved_grassland_ha",	"Heather_grassland_ha",	"Heather_ha",
+                                               #"Bog_ha",	"Freshwater_ha",	"Inland_rock_ha",	"Supralittoral_sediment_ha",	"Suburban_ha",	"Urban_ha"
+)],adonis_data, by="SampleSite_time")
+
+SampleSite_time<-merge(lofresh_metadata_WP2_3[, c("SampleSite_time","Dist_from_lake","Days")],SampleSite_time, by="SampleSite_time")
+
+adonis_data_meta<- adonis_data[c(1:17)]
+adonis_data<-adonis_data[,-c(1:17)]
+
+adonis_data<-na.omit(adonis_data)
+
+adonis_data_meta$Days<-as.numeric(adonis_data_meta$Days)
+#out <- nestedtemp(adonis_data)
+#plot(out)
+#plot(out, kind="incid")
+
+library(betapart)
+#library(qgraph)
+adonis_data<-adonis_data %>% mutate_if(is.numeric, ~1 * (. != 0))
+adonis_data<-adonis_data[, colSums(adonis_data != 0) > 0]
+sorensen.beta<-beta.pair(adonis_data, index.family="sorensen")
+
+nestedness <- as.matrix(sorensen.beta[[3]])
+nestedness <- melt(nestedness)
+names(nestedness) <- c("SiteID_1", "SiteID_2", "Beta_Distance")
+
+###-----------------------
+## get nestedness matrix (this is [[2]]) into a data frame
+###-----------------------
+m.beta.sorn <- as.matrix(sorensen.beta[[2]])
+m.beta.sorn <- melt(m.beta.sorn)
+names(m.beta.sorn) <- c("SiteID_1", "SiteID_2", "Beta_nest")
+beta.measures.sor <- merge(nestedness, m.beta.sorn, by = c("SiteID_1","SiteID_2")) 
+
+###-----------------------
+## get turnover matrix (here simpson, this is [[1]]) into a data frame
+###-----------------------
+m.beta.sort <- as.matrix(sorensen.beta[[1]])
+m.beta.sort  <- melt(m.beta.sort )
+names(m.beta.sort ) <- c("SiteID_1", "SiteID_2", "Beta_turn")
+beta.measures.sor <- merge(beta.measures.sor, m.beta.sort , by = c("SiteID_1","SiteID_2")) 
+
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_1")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_1 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_1 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_1 = Days)
+
+SampleSite_time<-SampleSite_time %>% rename(SiteID_2 = SiteID_1)
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_2")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_2 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_2 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_2 = Days)
+
+beta.measures.sor$Dist_from_lake_DIFF<-(beta.measures.sor$Dist_from_lake_2-beta.measures.sor$Dist_from_lake_1)
+beta.measures.sor_Towy<-beta.measures.sor
+
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_turn)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_nest)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_Distance)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+
+
+######## Turnover and nestedness Skan ########
+
+setwd("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/WP2_analysis/12S_BLAST")
+NORM_WP2_ASV_table_wide_filtered <- read_csv("NORM_WP2C_Skan_ASV_table_wide_filtered.csv")
+adonis_data<-NORM_WP2_ASV_table_wide_filtered
+
+SampleSite_time<-NORM_WP2_ASV_table_wide_filtered$X1
+SampleSite_time<-data.frame(SampleSite_time)
+SampleSite_time <- tibble::rownames_to_column(SampleSite_time, "SiteID_1")
+
+adonis_data_samples<-adonis_data$X1
+adonis_data_samples<-data.frame(adonis_data_samples)
+adonis_data_samples<-adonis_data_samples %>% rename(ID = adonis_data_samples)
+adonis_data<-adonis_data %>% rename(SampleSite_time = X1)
+
+lofresh_metadata_WP2_3 <- read_csv("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/metadata/lofresh_metadata_WP2&3.csv")
+lofresh_metadata_WP2_3 = lofresh_metadata_WP2_3[!duplicated(lofresh_metadata_WP2_3$SampleSite_time),]
+
+adonis_data<- merge(lofresh_metadata_WP2_3[, c("SampleSite_time","river_section","season","Days","Dist_from_lake","pH",
+                                               "conductivity_uS_cm","gran_alk_ueq_L","daily_flow_by_catchment","monthly_flow_by_catchment","seasonal_flow_by_catchment",
+                                               "week_before_flow_by_catchment","river_width_m","river_gradient_percent","rainfall_monthly_average",
+                                               "temp_monthly_average","Date_sampled"
+                                               #"Arable_and_horticulture_ha","Broadleaf_woodland_ha",	"Coniferous_woodland_ha",
+                                               #"Acid_grassland_ha",	"Neutral_grassland_ha",	"Improved_grassland_ha",	"Heather_grassland_ha",	"Heather_ha",
+                                               #"Bog_ha",	"Freshwater_ha",	"Inland_rock_ha",	"Supralittoral_sediment_ha",	"Suburban_ha",	"Urban_ha"
+)],adonis_data, by="SampleSite_time")
+
+SampleSite_time<-merge(lofresh_metadata_WP2_3[, c("SampleSite_time","Dist_from_lake","Days")],SampleSite_time, by="SampleSite_time")
+
+adonis_data_meta<- adonis_data[c(1:17)]
+adonis_data<-adonis_data[,-c(1:17)]
+
+adonis_data<-na.omit(adonis_data)
+
+adonis_data_meta$Days<-as.numeric(adonis_data_meta$Days)
+#out <- nestedtemp(adonis_data)
+#plot(out)
+#plot(out, kind="incid")
+
+library(betapart)
+#library(qgraph)
+adonis_data<-adonis_data %>% mutate_if(is.numeric, ~1 * (. != 0))
+adonis_data<-adonis_data[, colSums(adonis_data != 0) > 0]
+sorensen.beta<-beta.pair(adonis_data, index.family="sorensen")
+
+nestedness <- as.matrix(sorensen.beta[[3]])
+nestedness <- melt(nestedness)
+names(nestedness) <- c("SiteID_1", "SiteID_2", "Beta_Distance")
+
+###-----------------------
+## get nestedness matrix (this is [[2]]) into a data frame
+###-----------------------
+m.beta.sorn <- as.matrix(sorensen.beta[[2]])
+m.beta.sorn <- melt(m.beta.sorn)
+names(m.beta.sorn) <- c("SiteID_1", "SiteID_2", "Beta_nest")
+beta.measures.sor <- merge(nestedness, m.beta.sorn, by = c("SiteID_1","SiteID_2")) 
+
+###-----------------------
+## get turnover matrix (here simpson, this is [[1]]) into a data frame
+###-----------------------
+m.beta.sort <- as.matrix(sorensen.beta[[1]])
+m.beta.sort  <- melt(m.beta.sort )
+names(m.beta.sort ) <- c("SiteID_1", "SiteID_2", "Beta_turn")
+beta.measures.sor <- merge(beta.measures.sor, m.beta.sort , by = c("SiteID_1","SiteID_2")) 
+
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_1")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_1 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_1 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_1 = Days)
+
+SampleSite_time<-SampleSite_time %>% rename(SiteID_2 = SiteID_1)
+beta.measures.sor<-merge(SampleSite_time,beta.measures.sor,by="SiteID_2")
+beta.measures.sor<-beta.measures.sor %>% rename(SampleSite_time_2 = SampleSite_time)
+beta.measures.sor<-beta.measures.sor %>% rename(Dist_from_lake_2 = Dist_from_lake)
+beta.measures.sor<-beta.measures.sor %>% rename(Days_2 = Days)
+
+beta.measures.sor$Dist_from_lake_DIFF<-(beta.measures.sor$Dist_from_lake_2-beta.measures.sor$Dist_from_lake_1)
+beta.measures.sor_Skan<-beta.measures.sor
+
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_turn)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_nest)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+ggplot(beta.measures.sor, aes(x=(Dist_from_lake_DIFF), y=Beta_Distance)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_color_gradientn(colours = rainbow(5))+scale_x_continuous(limits = c(0, NA))
+
+#Compiling nestedness for different rivers
+beta.measures.sor_all<-rbind(beta.measures.sor_Conwy,beta.measures.sor_Glatt,beta.measures.sor_Gwash,
+                             beta.measures.sor_Towy)
+                            # beta.measures.sor_Skan)
+
+lofresh_metadata_WP2_3 <- read_csv("C:/Users/bsp81d/OneDrive - Bangor University/LOFRESH/metadata/lofresh_metadata_WP2&3.csv")
+lofresh_metadata_WP2_3 = lofresh_metadata_WP2_3[!duplicated(lofresh_metadata_WP2_3$SampleSite_time),]
+beta.measures.sor_all<-beta.measures.sor_all %>% rename(SampleSite_time = SampleSite_time_1)
+
+beta.measures.sor_all<- merge(lofresh_metadata_WP2_3[, c("SampleSite_time","River")],beta.measures.sor_all, by="SampleSite_time")
+
+beta.measures.sor_all<-beta.measures.sor_all %>%
+  group_by(SampleSite_time,SampleSite_time_2) %>%
+  filter(all(Dist_from_lake_DIFF>=0))
+#beta.measures.sor_all<-beta.measures.sor_all[beta.measures.sor_all$Dist_from_lake_DIFF != 0, ]
+
+
+ggplot(beta.measures.sor_all, aes(x=(Dist_from_lake_DIFF), y=Beta_turn,colour=River)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_x_continuous(limits = c(0, NA))+
+  scale_color_manual(values=c("#56B4E9","#F0E442","#E69F00","#0072B2"))
+ggplot(beta.measures.sor_all, aes(x=(Dist_from_lake_DIFF), y=Beta_nest,colour=River)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_x_continuous(limits = c(0, NA))+
+  scale_color_manual(values=c("#56B4E9","#F0E442","#E69F00","#0072B2"))
+ggplot(beta.measures.sor_all, aes(x=(Dist_from_lake_DIFF), y=Beta_Distance,colour=River)) +
+  geom_point(size=2, shape=23)+theme_bw()+
+  geom_smooth()+scale_x_continuous(limits = c(0, NA))+
+  scale_color_manual(values=c("#56B4E9","#F0E442","#E69F00","#0072B2"))
+
